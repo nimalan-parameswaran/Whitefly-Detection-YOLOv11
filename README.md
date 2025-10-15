@@ -1,1 +1,1 @@
-# Whitefly-Whitefly-Detection-YOLOv11-
+# Whitefly-Whitefly-Detection-YOLOv11
