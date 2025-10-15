@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whitefly Detection</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for Inter font and theme -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc; /* Light gray background */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-lg bg-white shadow-xl rounded-xl p-6 md:p-8 border border-gray-100">
+        <h1 class="text-3xl font-extrabold text-green-700 text-center mb-6">
+            Whitefly Detector 🌿
+        </h1>
+        <p class="text-center text-gray-500 mb-8">Upload a cassava leaf image to detect and count whiteflies using a YOLO model.</p>
+
+        <!-- Image Upload and Preview Area -->
+        <div id="upload-section" class="mb-6">
+            <label for="image-upload" class="block text-lg font-medium text-gray-700 mb-3">
+                1. Select an Image (File or Camera)
+            </label>
+            <input
+                type="file"
+                id="image-upload"
+                accept="image/*"
+                capture="environment"
+                class="hidden"
+            >
+            
+            <!-- Custom File Input Button -->
+            <button id="custom-upload-button" class="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50">
+                Choose Image / Take Photo
+            </button>
+            
+            <!-- Image Preview -->
+            <div class="mt-4 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 flex justify-center items-center h-48 overflow-hidden">
+                <img id="image-preview" src="https://placehold.co/400x200/e5e7eb/6b7280?text=Image+Preview" alt="Image Preview" class="object-contain max-h-full max-w-full rounded-md hidden">
+                <span id="preview-text" class="text-gray-400 text-center">No image selected.</span>
+            </div>
+        </div>
+
+        <!-- Detection Button -->
+        <div class="mb-8">
+            <button
+                id="detect-button"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-xl disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
+                disabled
+            >
+                <svg id="loading-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Detect Whiteflies
+            </button>
+        </div>
+
+        <!-- Results Display Area -->
+        <div id="results-container" class="border-t pt-6 hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+                Detection Results
+            </h2>
+            <div id="error-message" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-4 hidden" role="alert">
+                <strong class="font-bold">Error:</strong>
+                <span id="error-text" class="block sm:inline"></span>
+            </div>
+            
+            <div class="bg-green-50 p-4 rounded-lg mb-4">
+                <p id="whitefly-count" class="text-xl font-extrabold text-green-700 text-center">
+                    <!-- Count will be inserted here -->
+                </p>
+            </div>
+            
+            <p class="text-gray-600 mb-2 font-medium">Annotated Image:</p>
+            <div class="border border-gray-200 rounded-lg p-1 bg-white flex justify-center items-center overflow-hidden">
+                <img id="result-image" src="" alt="Annotated Image with Bounding Boxes" class="w-full h-auto max-h-[500px] object-contain rounded-md">
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JavaScript Logic (ES Module for Gradio Client) -->
+    <script type="module">
+        import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+
+        // --- DOM Elements ---
+        const imageUpload = document.getElementById('image-upload');
+        const imagePreview = document.getElementById('image-preview');
+        const previewText = document.getElementById('preview-text');
+        const detectButton = document.getElementById('detect-button');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const resultsContainer = document.getElementById('results-container');
+        const resultImage = document.getElementById('result-image');
+        const whiteflyCount = document.getElementById('whitefly-count');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        const customUploadButton = document.getElementById('custom-upload-button');
+
+        const HUGGINGFACE_SPACE = "nimalan/whitefly-cassava";
+        const API_ENDPOINT = "/predict";
+        
+        // --- State ---
+        let selectedFile = null;
+
+        // --- Utility Functions ---
+
+        /**
+         * Hides all result/error elements and shows the loading state.
+         * @param {boolean} isLoading - true to show spinner, false to hide.
+         */
+        function setLoading(isLoading) {
+            detectButton.disabled = isLoading;
+            detectButton.classList.toggle('opacity-50', isLoading);
+            loadingSpinner.classList.toggle('hidden', !isLoading);
+            errorMessage.classList.add('hidden');
+            if (isLoading) {
+                detectButton.innerHTML = `<svg id="loading-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Processing...`;
+                resultsContainer.classList.add('hidden');
+            } else {
+                 detectButton.innerHTML = `Detect Whiteflies`;
+            }
+        }
+
+        /**
+         * Shows an error message in the dedicated UI element.
+         * @param {string} message - The error message to display.
+         */
+        function showError(message) {
+            errorText.textContent = message;
+            errorMessage.classList.remove('hidden');
+            resultsContainer.classList.remove('hidden'); // Show container for error display
+            whiteflyCount.textContent = 'Detection failed.';
+            resultImage.src = '';
+            resultImage.classList.add('hidden');
+        }
+
+
+        // --- Event Handlers ---
+        
+        /** Handles the click on the custom upload button to trigger the hidden file input. */
+        customUploadButton.addEventListener('click', () => {
+            imageUpload.click();
+        });
+
+        /** Handles file selection and updates the preview. */
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                selectedFile = file;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.src = e.target.result;
+                    imagePreview.classList.remove('hidden');
+                    previewText.classList.add('hidden');
+                    detectButton.disabled = false;
+                    resultsContainer.classList.add('hidden'); // Reset results on new upload
+                    errorMessage.classList.add('hidden'); // Hide any previous error
+                };
+                reader.readAsDataURL(file);
+            } else {
+                selectedFile = null;
+                imagePreview.src = '';
+                imagePreview.classList.add('hidden');
+                previewText.classList.remove('hidden');
+                detectButton.disabled = true;
+            }
+        });
+
+        /** Handles the detection process. */
+        detectButton.addEventListener('click', async () => {
+            if (!selectedFile) {
+                showError("Please select an image first.");
+                return;
+            }
+
+            setLoading(true);
+
+            try {
+                // 1. Connect to the Gradio Space
+                const client = await Client.connect(HUGGINGFACE_SPACE);
+                
+                // 2. Predict using the uploaded file
+                // Gradio Client handles file upload details for us when passed a File object
+                const result = await client.predict(API_ENDPOINT, {
+                    image: selectedFile,
+                });
+
+                // 3. Process the result data
+                // The expected output format from this Gradio Space is typically an array
+                // with the annotated image (as a path or base64 URL) and the count (as a number/string).
+                
+                // Inspecting the model output structure based on typical Gradio API responses:
+                // result.data should be an array: [annotated_image_object, whitefly_count_string]
+                
+                const annotatedImageObj = result.data[0];
+                const countString = result.data[1]; 
+                
+                let imageUrl = '';
+                let whiteflyCountValue = 0;
+
+                // Check for image data (can be a base64 string or a file path/URL)
+                if (annotatedImageObj && annotatedImageObj.url) {
+                    // For remote files/paths returned by Gradio
+                    imageUrl = annotatedImageObj.url; 
+                } else if (annotatedImageObj && annotatedImageObj.image) {
+                    // Sometimes the base64 data is returned under an 'image' key
+                    imageUrl = `data:${annotatedImageObj.mimeType || 'image/png'};base64,${annotatedImageObj.image}`;
+                } else if (typeof annotatedImageObj === 'string' && annotatedImageObj.startsWith('data:image')) {
+                    // Direct base64 string
+                    imageUrl = annotatedImageObj;
+                } else if (typeof annotatedImageObj === 'string' && annotatedImageObj.startsWith('/file=')) {
+                     // Direct file path (might need full URL, but client often resolves it)
+                    imageUrl = client.join_path(annotatedImageObj);
+                } else {
+                    throw new Error("Could not parse annotated image data from the Gradio response.");
+                }
+
+                // Parse the count
+                whiteflyCountValue = parseInt(countString, 10);
+                if (isNaN(whiteflyCountValue)) {
+                    // Fallback in case the model returns a string like "Count: 5"
+                    const match = countString.match(/\d+/);
+                    whiteflyCountValue = match ? parseInt(match[0], 10) : 0;
+                }
+                
+                // 4. Update UI with results
+                resultImage.src = imageUrl;
+                resultImage.classList.remove('hidden');
+                whiteflyCount.textContent = `Whiteflies Detected: ${whiteflyCountValue}`;
+                resultsContainer.classList.remove('hidden');
+                
+            } catch (e) {
+                console.error("Detection failed:", e);
+                showError(`Prediction failed. Check the console for details. (Error: ${e.message})`);
+            } finally {
+                setLoading(false);
+            }
+        });
+
+    </script>
+</body>
+</html>
