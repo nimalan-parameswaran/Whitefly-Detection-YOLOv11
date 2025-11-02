@@ -54,13 +54,12 @@ During preprocessing, images were resized, normalized, and augmented through rot
 
 ---
 
-## ⚙️ Backend — Hugging Face Space
+## Backend — Hugging Face Space
 
 The backend service is hosted on **Hugging Face Spaces** ([nimalan/whitefly-cassava](https://huggingface.co/spaces/nimalan/whitefly-cassava)) using **Gradio** for the interface.
 The `app.py` script loads the ONNX model, runs inference, and returns both the annotated image and the detection count.
 
-### app.py Core Logic
-[app.py]([https://huggingface.co/spaces/nimalan/whitefly-cassava](https://huggingface.co/spaces/nimalan/whitefly-cassava/blob/main/app.py))
+### [app.py](https://huggingface.co/spaces/nimalan/whitefly-cassava/blob/main/app.py)
 ---
 
 ## Frontend — GitHub Pages
