@@ -4,6 +4,7 @@ An AI-powered web app that detects and counts **whiteflies on cassava leaves** u
 The model is deployed on **Hugging Face Spaces**, while the **frontend** is hosted on **GitHub Pages** for public access.
 
 🔗 **Live App:** [Whitefly Detection Web App](https://nimalan-parameswaran.github.io/Whitefly-Detection-YOLOv11/)
+
 🔗 **Hugging Face Space:** [nimalan/whitefly-cassava](https://huggingface.co/spaces/nimalan/whitefly-cassava)
 
 ---
