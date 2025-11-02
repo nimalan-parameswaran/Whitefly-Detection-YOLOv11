@@ -1,0 +1,7 @@
+gradio
+onnxruntime
+numpy
+opencv-python
+Pillow
+ultralytics
+opencv-python-headless
